@@ -3,6 +3,7 @@
         JavaSE(基础)
     </h1>
 </center>
+
 ## 1. JDK的安装及环境变量配置
 
 ### 1.1 JRE (Java Runtime Environment)
