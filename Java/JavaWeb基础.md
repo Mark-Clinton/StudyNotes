@@ -2772,6 +2772,7 @@ form的属性
 1.基本语法
 
 - 与html结合方式
+
   - 内部JS：定义`<script>`，标签体内容就是js代码
   - 外部JS：定义`<script>`，通过src属性引入外部js文件
   - 注意
@@ -2806,7 +2807,7 @@ form的属性
   - 语法：var 变量名 = 初始化值;
 
   - typeof运算符：获取变量的类型。
-    			* 注：null运算后得到的是object
+    	* 注：null运算后得到的是object
 
 - 运算符
 
@@ -2818,7 +2819,7 @@ form的属性
      - ++(--) 在后，先运算，再自增(自减)
      - +(-)：正负号
      - 注意：在JS中，如果运算数不是运算符所要求的类型，那么js引擎会自动的将运算数进行类型转换
-     -  其他类型转number
+     - 其他类型转number
        - string转number：按照字面值转换。如果字面值不是数字，则转为NaN（不是数字的数字）
        - boolean转number：true转为1，false转为0
 
@@ -6334,3 +6335,1534 @@ Jsp默认支持el表达式的。如果要忽略el表达式
 4.测试
 
 5.部署运维
+
+## 14. Filter：过滤器
+
+**概念**
+
+- 生活中的过滤器：净水器，空气净化器，土匪。
+- web中的过滤器：当访问服务器的资源时，过滤器可以将请求拦截下来，完成一些特殊的功能。
+- 过滤器的作用：一般用于完成通用的操作。如：登录验证、统一编码处理、敏感字符过滤。
+
+**快速入门**
+
+1.步骤
+
+- 定义一个类，实现接口Filter
+- 复写方法
+- 配置拦截路径
+  - web.xml
+  - 注解
+
+2.代码
+
+```Java
+import javax.servlet.*;
+import javax.servlet.annotation.WebFilter;
+import java.io.IOException;
+
+@WebFilter("/*") //访问所有资源之前，都会执行该过滤器
+public class FilterDemo1 implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        System.out.println("FilterDemo1被执行了");
+        //放行
+        filterChain.doFilter(servletRequest,servletResponse);
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+}
+```
+
+**过滤器细节**
+
+1.web.xml配置
+
+```XML
+<filter>
+    <filter-name>demo1</filter-name>
+    <filter-class>com.itahu.web.filter.FilterDemo1</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>demo1</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+```
+
+2.过滤器执行流程
+
+- 执行过滤器
+- 执行放行后的资源
+- 回来执行过滤器放行代码下边的代码
+
+3.过滤器生命周期方法
+
+- init：在服务器启动后，会创建Filter对象，然后调用init方法。只执行一次。用于加载资源
+- doFilter：每一次请求被拦截资源时，会执行。执行多次
+- destroy：在服务器关闭后，Filter对象被销毁。如果服务器是正常关闭，则会执行destroy方法。只执行一次。用于释放资源
+
+4.过滤器配置详解
+
+- 拦截路径配置
+  1. 具体资源路径：/index.jsp   只有访问index.jsp资源时，过滤器才会被执行
+  2. 拦截目录：/user/*   访问/user下的所有资源时，过滤器都会被执行
+  3. 后缀名拦截：*.jsp   访问所有后缀名为jsp资源时，过滤器都会被执行
+  4. 拦截所有资源：/*   访问所有资源时，过滤器都会被执行
+- 拦截方式配置：资源被访问的方式
+  - 注解配置：设置dispatcherTypes属性
+    1. REQUEST：默认值。浏览器直接请求资源
+    2. FORWARD：转发访问资源
+    3. INCLUDE：包含访问资源
+    4. ERROR：错误跳转资源
+    5. ASYNC：异步访问资源
+  - web.xml配置
+    - 设置\<dispatcher>\</dispatcher>标签即可
+
+5.过滤器链(配置多个过滤器)
+
+- 执行顺序：如果有两个过滤器：过滤器1和过滤器2
+  - 过滤器1
+  - 过滤器2
+  - 资源执行
+  - 过滤器2
+  - 过滤器1
+- 过滤器先后顺序问题
+  - 注解配置：按照类名的字符串比较规则比较，值小的先执行
+    - 如：AFilter 和 BFilter，AFilter就先执行了
+  - web.xml配置： \<filter-mapping>谁定义在上边，谁先执行
+
+**案例**
+
+1.案例1：登录验证
+
+- 需求
+  - 访问Day16Case案例的资源。验证其是否登录
+  - 如果登录了，则直接放行
+  - 如果没有登录，则跳转到登录页面，提示"您尚未登录，请先登录"
+
+```Java
+import javax.servlet.*;
+import javax.servlet.annotation.WebFilter;
+import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
+
+@WebFilter("/*")
+public class LoginFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) servletRequest;
+        String uri = request.getRequestURI();
+        if (uri.contains("/login.jsp") || uri.contains("/loginServlet") || uri.contains("/css/") || uri.contains("/js/")|| uri.contains("/fonts/") || uri.contains("/checkCodeServlet")) {
+            filterChain.doFilter(servletRequest,servletResponse);
+        } else {
+            Object user = request.getSession().getAttribute("user");
+            if (user != null) {
+                filterChain.doFilter(servletRequest,servletResponse);
+            } else {
+                request.setAttribute("login_msg","您尚未登录，请登录");
+                request.getRequestDispatcher("/login.jsp").forward(request,servletResponse);
+            }
+        }
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+}
+```
+
+2.案例2：敏感词汇过滤
+
+- 需求
+  - 对Day16Case案例录入的数据进行敏感词汇过滤
+  - 敏感词汇参考《敏感词汇.txt》
+  - 如果是敏感词汇，替换为 *** 
+- 分析
+  - 对request对象进行增强。增强获取参数相关方法
+  - 放行。传递代理对象
+
+**增强对象的功能**
+
+设计模式：一些通用的解决固定问题的方式。
+
+1.装饰模式
+
+2.代理模式
+
+- 概念
+  - 真实对象：被代理的对象
+  - 代理对象
+  - 代理模式：代理对象代理真实对象，达到增强真实对象功能的目的
+- 实现方式
+  - 静态代理：有一个类文件描述代理模式
+  - 动态代理：在内存中形成代理类
+    - 实现步骤
+      1. 代理对象和真实对象实现相同的接口
+      2. 代理对象 = Proxy.newProxyInstance();
+      3. 使用代理对象调用方法
+      4. 增强方法
+    - 增强方式
+      1. 增强参数列表
+      2. 增强返回值类型
+      3. 增强方法体执行逻辑	
+
+敏感词汇案例主要代码
+
+```Java
+import javax.servlet.*;
+import javax.servlet.annotation.WebFilter;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
+
+@WebFilter("/*")
+public class SensitiveWordsFilter implements Filter {
+    private List<String> list = new ArrayList<String>();
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        try {
+            ServletContext servletContext = filterConfig.getServletContext();
+            String realPath = servletContext.getRealPath("/WEB-INF/classes/敏感词汇.txt");
+            BufferedReader br = new BufferedReader(new FileReader(realPath));
+            String line = null;
+            while ((line = br.readLine()) != null) {
+                list.add(line);
+            }
+            br.close();
+            System.out.println(list);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        ServletRequest proxy_req = (ServletRequest) Proxy.newProxyInstance(servletRequest.getClass().getClassLoader(), servletRequest.getClass().getInterfaces(), new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                if (method.getName().equals("getParameter")) {
+                    String value = (String) method.invoke(servletRequest, args);
+                    if (value != null) {
+                        for (String s : list) {
+                            if (value.contains(s)) {
+                                value = value.replaceAll(s,"***");
+                            }
+                        }
+                    }
+                    return value;
+                }
+                return method.invoke(servletRequest,args);
+            }
+        });
+        filterChain.doFilter(proxy_req,servletResponse);
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+}
+```
+
+## 15. Listener：监听器
+
+**概念：**Web的三大组件之一。
+
+-  事件监听机制
+  - 事件：一件事情
+  - 事件源：事件发生的地方
+  - 监听器：一个对象
+  - 注册监听：将事件、事件源、监听器绑定在一起。当事件源上发生某个事件后，执行监听器代码
+
+**ServletContextListener：监听ServletContext对象的创建和销毁**
+
+方法
+
+- void contextDestroyed(ServletContextEvent sce)：ServletContext对象被销毁之前会调用该方法
+- void contextInitialized(ServletContextEvent sce)：ServletContext对象创建后会调用该方法
+
+步骤
+
+- 定义一个类，实现ServletContextListener接口
+
+- 复写方法
+
+- 配置
+
+  - web.xml
+
+  - ```XML
+    <listener>
+        <listener-class>com.itahu.web.listener.ContextLoaderListener</listener-class>
+    </listener>
+    ```
+
+  - ```XML
+    <!--指定初始化参数<context-param>-->
+    <context-param>
+        <param-name>contextConfigLocation</param-name>
+        <param-value>/WEB-INF/classes/applicationContext.xml</param-value>
+    </context-param>
+    ```
+
+  - 注解
+
+    - @WebListener
+
+## 16. JQuery
+
+### 16.1 JQuery基础
+
+**概念：**一个JavaScript框架。简化JS开发。
+
+- JQuery是一个快速、简洁的JavaScript框架，是继Prototype之后又一个优秀的JavaScript代码库（或JavaScript框架）。jQuery设计的宗旨	是“write Less，Do More”，即倡导写更少的代码，做更多的事情。它封装JavaScript常用的功能代码，提供一种简便的JavaScript设计模式，优	化HTML文档操作、事件处理、动画设计和Ajax交互。
+- JavaScript框架：本质上就是一些js文件，封装了js的原生代码而已。
+
+**快速入门**
+
+步骤
+
+- 下载JQuery
+
+  - 目前JQuery有三个大版本
+
+    1.x：兼容ie678,使用最为广泛的，官方只做BUG维护，功能不再新增。因此一般项目来说，使用1.x版本就可以了，最终版本：1.12.4 (2016年5月20日)
+
+    2.x：不兼容ie678，很少有人使用，官方只做BUG维护，功能不再新增。如果不考虑兼容低版本的浏览器可以使用2.x，最终版本：2.2.4 (2016年5月20日)
+
+    3.x：不兼容ie678，只支持最新的浏览器。除非特殊要求，一般不会使用3.x版本的，很多老的jQuery插件不支持这个版本。目前该版本是官方主要更新维护的版本。最新版本：3.2.1 (2017年3月20日)
+
+  - jquery-xxx.js 与 jquery-xxx.min.js区别
+
+    - jquery-xxx.js：开发版本。给程序员看的，有良好的缩进和注释。体积大一些
+    - jquery-xxx.min.js：生产版本。程序中使用，没有缩进。体积小一些。程序加载更快
+
+- 导入JQuery的js文件：导入min.js文件
+
+- 使用
+
+  ```Js
+  var div1 = $("#div1");
+  alert(div1.html());
+  ```
+
+**JQuery对象和JS对象区别与转换**
+
+1.JQuery对象在操作时，更加方便。
+
+2.JQuery对象和js对象方法不通用的.
+
+3.两者相互转换
+
+- jq -- > js：jq对象[索引] 或者 jq对象.get(索引)
+- js -- > jq：$(js对象)
+
+**选择器：筛选具有相似特征的元素(标签)**
+
+1.基本操作学习
+
+1. 事件绑定
+
+   ```Js
+   $("#b1").click(function () {
+       alert("abc");
+   });
+   ```
+
+2. 入口函数
+
+   ```Js
+   $(function () {
+       
+   })
+   ```
+
+   - window.onload  和 $(function) 区别
+     - window.onload只能定义一次，如果定义多次，后边的会将前边的覆盖掉
+     - $(function)可以定义多次的
+
+3. 样式控制：css方法
+
+   - $("#div1").css("background-color","red");
+   - $("#div1").css("backgroundColor","pink");
+
+2.分类
+
+- 基本选择器
+  1. 标签选择器（元素选择器）
+     - 语法：$("html标签名") 获得所有匹配标签名称的元素
+  2. id选择器
+     - 语法：$("#id的属性值") 获得与指定id属性值匹配的元素
+  3. 类选择器
+     - 语法：$(".class的属性值") 获得与指定的class属性值匹配的元素
+  4. 并集选择器
+     - 语法：$("选择器1,选择器2....") 获取多个选择器选中的所有元素
+- 层级选择器
+  1. 后代选择器
+     - 语法：$("A B ") 选择A元素内部的所有B元素	
+  2. 子选择器
+     - 语法：$("A > B") 选择A元素内部的所有B子元素
+- 属性选择器
+  1. 属性名称选择器 
+     - 语法：$("A[属性名]") 包含指定属性的选择器
+  2. 属性选择器
+     - 语法：$("A[属性名='值']") 包含指定属性等于指定值的选择器
+  3. 复合属性选择器
+     - 语法：$("A\[属性名='值'][]...") 包含多个属性条件的选择器
+- 过滤选择器
+  1. 首元素选择器 
+     - 语法：:first 获得选择的元素中的第一个元素
+  2. 尾元素选择器
+     - 语法：:last 获得选择的元素中的最后一个元素
+  3. 非元素选择器
+     - 语法：:not(selector) 不包括指定内容的元素
+  4. 偶数选择器
+     - 语法：:even 偶数，从 0 开始计数
+  5. 奇数选择器
+     - 语法：:odd 奇数，从 0 开始计数
+  6. 等于索引选择器
+     - 语法：:eq(index) 指定索引元素
+  7. 大于索引选择器 
+     - 语法：:gt(index) 大于指定索引元素
+  8. 小于索引选择器 
+     - 语法：:lt(index) 小于指定索引元素
+  9. 标题选择器
+     - 语法：:header 获得标题（h1~h6）元素，固定写法
+- 表单过滤选择器
+  1. 可用元素选择器 
+     - 语法：:enabled 获得可用元素
+  2. 不可用元素选择器 
+     - 语法：:disabled 获得不可用元素
+  3. 选中选择器 
+     - 语法：:checked 获得单选/复选框选中的元素
+  4. 选中选择器
+     - 语法：:selected 获得下拉框选中的元素
+
+### 16.2 JQuery的DOM操作
+
+**DOM操作**
+
+1.内容操作
+
+- html()：获取/设置元素的标签体内容   \<a>\<font>内容\</font>\</a> --> \<font>内容\</font>
+- text()：获取/设置元素的标签体纯文本内容   \<a>\<font>内容\</font>\</a> --> 内容
+- val()：获取/设置元素的value属性值
+
+2.属性操作
+
+- 通用属性操作
+  - attr()：获取/设置元素的属性
+  - removeAttr()：删除属性
+  - prop()：获取/设置元素的属性
+  - removeProp()：删除属性
+  - attr和prop区别
+    - 如果操作的是元素的固有属性，则建议使用prop
+    - 如果操作的是元素自定义的属性，则建议使用attr
+- 对class属性操作
+  - addClass()：添加class属性值
+  - removeClass()：删除class属性值
+  - toggleClass()：切换class属性
+    - toggleClass("one")：判断如果元素对象上存在class="one"，则将属性值one删除掉。  如果元素对象上不存在class="one"，则添加
+  - css()
+
+3.CRUD操作
+
+1. append()：父元素将子元素追加到末尾
+   - 对象1.append(对象2)：将对象2添加到对象1元素内部，并且在末尾
+2. prepend()：父元素将子元素追加到开头
+   - 对象1.prepend(对象2)：将对象2添加到对象1元素内部，并且在开头
+3. appendTo()
+   - 对象1.appendTo(对象2)：将对象1添加到对象2内部，并且在末尾
+4. prependTo()
+   - 对象1.prependTo(对象2)：将对象1添加到对象2内部，并且在开头
+5. after()：添加元素到元素后边
+   - 对象1.after(对象2)：将对象2添加到对象1后边。对象1和对象2是兄弟关系
+6. before()：添加元素到元素前边
+   - 对象1.before(对象2)：将对象2添加到对象1前边。对象1和对象2是兄弟关系
+7. insertAfter()
+   - 对象1.insertAfter(对象2)：将对象1添加到对象2后边。对象1和对象2是兄弟关系
+8. insertBefore()
+   - 对象1.insertBefore(对象2)：将对象1添加到对象2前边。对象1和对象2是兄弟关系
+9. remove()：移除元素
+   - 对象.remove()：将对象删除掉
+10. empty()：清空元素的所有后代元素
+    - 对象.empty()：将对象的后代元素全部清空，但是保留当前对象以及其属性节点
+
+### 16.3 JQuery高级
+
+**动画**
+
+三种方式显示和隐藏元素
+
+1. 默认显示和隐藏方式
+   - show([speed,[easing],[fn]])
+     - 参数
+       1. speed：动画的速度。三个预定义的值("slow","normal","fast")或表示动画时长的毫秒数值(如：1000)
+       2. easing：用来指定切换效果，默认是"swing"，可用参数"linear"
+          - swing：动画执行时效果是先慢，中间快，最后又慢
+          - linear：动画执行时速度是匀速的
+       3. fn：在动画完成时执行的函数，每个元素执行一次
+   - hide([speed,[easing],[fn]])
+   - toggle([speed],[easing],[fn])
+2. 滑动显示和隐藏方式
+   - slideDown([speed],[easing],[fn])
+   - slideUp([speed,[easing],[fn]])
+   - slideToggle([speed],[easing],[fn])
+3. 淡入淡出显示和隐藏方式
+   - fadeIn([speed],[easing],[fn])
+   - fadeOut([speed],[easing],[fn])
+   - fadeToggle([speed,[easing],[fn]])
+
+**遍历**
+
+1.js的遍历方式
+
+- for(初始化值;循环结束条件;步长)
+
+2.jq的遍历方式
+
+- jq对象.each(callback)
+  1. 语法：jquery对象.each(function(index,element){});
+     - index：就是元素在集合中的索引
+     - element：就是集合中的每一个元素对象
+     - this：集合中的每一个元素对象
+  2. 回调函数返回值
+     - false：如果当前function返回为false，则结束循环(break)
+     - true：如果当前function返回为true，则结束本次循环，继续下次循环(continue)
+- $.each(object, [callback])
+- for..of：jquery 3.0 版本之后提供的方式
+  - for(元素对象 of 容器对象)
+
+**事件绑定**
+
+1.jquery标准的绑定方式
+
+- jq对象.事件方法(回调函数)
+- 注：如果调用事件方法，不传递回调函数，则会触发浏览器默认行为
+  - 表单对象.submit();//让表单提交
+
+2.on绑定事件/off解除绑定
+
+- jq对象.on("事件名称",回调函数)
+- jq对象.off("事件名称")
+  - 如果off方法不传递任何参数，则将组件上的所有事件全部解绑
+
+3.事件切换：toggle
+
+- jq对象.toggle(fn1,fn2...)
+
+  - 当单击jq对象对应的组件后，会执行fn1.第二次点击会执行fn2.....
+
+- 注意：1.9版本 .toggle() 方法删除，jQuery Migrate（迁移）插件可以恢复此功能
+
+  - ```Js
+    <script src="../js/jquery-migrate-1.0.0.js" type="text/javascript" charset="utf-8"></script>
+    ```
+
+案例1：广告的显示和隐藏
+
+```HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>广告的自动显示与隐藏</title>
+    <style>
+        #content{width:100%;height:500px;background:#999}
+    </style>
+
+    <!--引入jquery-->
+    <script type="text/javascript" src="../js/jquery-3.3.1.min.js"></script>
+    <script>
+        $(function () {
+            setTimeout(adShow,3000);
+            setTimeout(adHide,8000);
+        });
+
+        function adShow() {
+            $("#ad").show("slow");
+        }
+
+        function adHide() {
+            $("#ad").hide("slow");
+        }
+    </script>
+</head>
+<body>
+<!-- 整体的DIV -->
+<div>
+    <!-- 广告DIV -->
+    <div id="ad" style="display: none;">
+        <img style="width:100%" src="../img/adv.jpg" />
+    </div>
+
+    <!-- 下方正文部分 -->
+    <div id="content">
+        正文部分
+    </div>
+</div>
+</body>
+</html>
+```
+
+案例2：图片抽奖
+
+```HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>jquery案例之抽奖</title>
+    <script type="text/javascript" src="../js/jquery-3.3.1.min.js"></script>
+    <script language="JavaScript" type="text/javascript">
+        var imgs = ["../img/man00.jpg",
+            "../img/man01.jpg",
+            "../img/man02.jpg",
+            "../img/man03.jpg",
+            "../img/man04.jpg",
+            "../img/man05.jpg",
+            "../img/man06.jpg",
+        ];
+        var startId;
+        var index;
+        $(function () {
+            $("#startID").prop("disabled",false);
+            $("#stopID").prop("disabled",true);
+
+            $("#startID").click(function () {
+                $("#startID").prop("disabled",true);
+                $("#stopID").prop("disabled",false);
+                startId = setInterval(function () {
+                    index = Math.floor(Math.random() * 7);
+                    $("#img1ID").prop("src",imgs[index]);
+                },20);
+            });
+
+            $("#stopID").click(function () {
+                $("#startID").prop("disabled",false);
+                $("#stopID").prop("disabled",true);
+                clearInterval(startId);
+                $("#img2ID").prop("src",imgs[index]).hide();
+                $("#img2ID").show(1000);
+            });
+        });
+    </script>
+</head>
+<body>
+
+<!-- 小像框 -->
+<div style="border-style:dotted;width:160px;height:100px">
+    <img id="img1ID" src="../img/man00.jpg" style="width:160px;height:100px"/>
+</div>
+
+<!-- 大像框 -->
+<div
+        style="border-style:double;width:800px;height:500px;position:absolute;left:500px;top:10px">
+    <img id="img2ID" src="../img/man00.jpg" width="800px" height="500px"/>
+</div>
+
+<!-- 开始按钮 -->
+<input
+        id="startID"
+        type="button"
+        value="点击开始"
+        style="width:150px;height:150px;font-size:22px"
+        onclick="imgStart()">
+
+<!-- 停止按钮 -->
+<input
+        id="stopID"
+        type="button"
+        value="点击停止"
+        style="width:150px;height:150px;font-size:22px"
+        onclick="imgStop()">
+
+
+<script language='javascript' type='text/javascript'>
+    //准备一个一维数组，装用户的像片路径
+    var imgs = [
+        "../img/man00.jpg",
+        "../img/man01.jpg",
+        "../img/man02.jpg",
+        "../img/man03.jpg",
+        "../img/man04.jpg",
+        "../img/man05.jpg",
+        "../img/man06.jpg"
+    ];
+
+</script>
+</body>
+</html>
+```
+
+**插件：增强JQuery的功能**
+
+实现方式
+
+- $.fn.extend(object) 
+  - 增强通过Jquery获取的对象的功能  $("#id")
+- $.extend(object)
+  - 增强JQeury对象自身的功能  $/jQuery
+
+## 17. AJAX
+
+### 17.1 AJAX概述
+
+**概念：**ASynchronous JavaScript And XML，异步的JavaScript 和 XML。
+
+异步和同步：客户端和服务器端相互通信的基础上。
+
+- 客户端必须等待服务器端的响应。在等待的期间客户端不能做其他操作。
+- 客户端不需要等待服务器端的响应。在服务器处理请求的过程中，客户端可以进行其他的操作。
+
+Ajax 是一种在无需重新加载整个网页的情况下，能够更新部分网页的技术。
+
+通过在后台与服务器进行少量数据交换，Ajax 可以使网页实现异步更新。这意味着可以在不重新加载整个网页的情况下，对网页的某部分进行更新。
+
+传统的网页（不使用 Ajax）如果需要更新内容，必须重载整个网页页面。
+
+提升用户的体验。
+
+### 17.2 实现方式
+
+**原生的JS实现方式(了解)**
+
+```HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script>
+        function fun() {
+            //1.创建核心对象
+            var xhttp;
+            if (window.XMLHttpRequest) {
+                xhttp = new XMLHttpRequest();
+            } else {
+                // code for IE6, IE5
+                xhttp = new ActiveXObject("Microsoft.XMLHTTP");
+            }
+
+            //2. 建立连接
+            /*
+                参数：
+                    1. 请求方式：GET、POST
+                        * get方式，请求参数在URL后边拼接。send方法为空参
+                        * post方式，请求参数在send方法中定义
+                    2. 请求的URL：
+                    3. 同步或异步请求：true（异步）或 false（同步）
+
+             */
+            xhttp.open("GET", "ajaxServlet?username=tom", true);
+
+            //3.发送请求
+            xhttp.send();
+
+            //4.接受并处理来自服务器的响应结果
+            //获取方式：xhttp.responseText
+            //什么时候获取？当服务器响应成功后再获取
+            //当xmlhttp对象的就绪状态改变时，触发事件onreadystatechange
+            xhttp.onreadystatechange = function() {
+                //判断readyState就绪状态是否为4，判断status响应状态码是否为200
+                if (this.readyState == 4 && this.status == 200) {
+                    //获取服务器的响应结果
+                    let responseText = xhttp.responseText;
+                    alert(responseText);
+                }
+            };
+        }
+    </script>
+</head>
+<body>
+  <input type="button" value="发送异步请求" onclick="fun();">
+  <input>
+</body>
+</html>
+```
+
+**JQuery实现方式**
+
+1.$.ajax()
+
+- 语法：$.ajax({键值对});
+
+- ```Js
+  //使用$.ajax()发送异步请求
+  $.ajax({
+      url:"ajaxServlet111", //请求路径
+      type:"post", //请求方式
+      // data:"username=jack&age=23",
+      data:{"username":"jack","age":23},
+      success:function (data) {
+          alert(data);
+      }, //响应成功后的回调函数
+      error:function () {
+          alert("出错了...");
+      }, //表示如果请求响应出现错误，会执行的回调函数
+      dataType:"text" //设置接受到的响应数据的格式
+  });
+  ```
+
+2.$.get()：发送get请求
+
+- 语法：$.get(url, [data], [callback], [type])
+- 参数
+  - url：请求路径
+  - data：请求参数
+  - callback：回调函数
+  - type：响应结果的类型
+
+3.$.post()：发送post请求
+
+- 语法：$.post(url, [data], [callback], [type])
+- 参数
+  - url：请求路径
+  - data：请求参数
+  - callback：回调函数
+  - type：响应结果的类型
+
+## 18. JSON
+
+### 18.1 JSON概述
+
+**概念：**JavaScript Object Notation，JavaScript对象表示法。
+
+- var p = {"name":"张三","age":23,"gender":"男"};
+- Json现在多用于存储和交换文本信息的语法
+- 进行数据的传输
+- JSON 比 XML 更小，更快，更易解析
+
+**语法**
+
+1.基本规则
+
+- 数据在名称/值对中：json数据是由键值对构成的
+- 键用引号(单双都行)引起来，也可以不使用引号
+- 值的取值类型
+  - 数字（整数或浮点数）
+  - 字符串（在双引号中）
+  - 逻辑值（true 或 false）
+  - 数组（在方括号中）{"persons":[{},{}]}
+  - 对象（在花括号中）{"address":{"province"："陕西"....}}
+  - null
+- 数据由逗号分隔：多个键值对由逗号分隔
+- 花括号保存对象：使用{}定义json 格式
+- 方括号保存数组：[]
+
+2.获取数据
+
+- json对象.键名
+- json对象["键名"]
+- 数组对象[索引]
+- 遍历
+
+```Js
+<script>
+    //1. 基本定义格式
+    var person = {"name":"张三",age:23,'gender':true};
+    // alert(person);
+
+    // var name = person.name;
+    // var name = person["name"];
+    // alert(name);
+
+    //嵌套格式  {} ---> []
+    var persons = {
+        "persons":[
+            {"name":"张三","age":23,"gender":true},
+            {"name":"李四","age":24,"gender":true},
+            {"name":"王五","age":25,"gender":false}
+        ]
+    };
+    // alert(persons);
+    // 获取王五值
+    // var name1 = persons.persons[2].name;
+    // alert(name1);
+
+    var ps = [
+        {"name": "张三", "age": 23, "gender": true},
+        {"name": "李四", "age": 24, "gender": true},
+        {"name": "王五", "age": 25, "gender": false}
+    ];
+    // alert(ps);
+    // 获取李四值
+    // alert(ps[1].name);
+
+    //获取person对象中所有的键和值
+    //for in 循环
+    /*for (var key in person) {
+        //这样的方式获取不行。因为相当于  person."name"
+        // alert(key + ":" + person.key);
+        alert(key + ":" + person[key]);
+    }*/
+
+    //获取ps中的所有值
+    for (var i = 0; i < ps.length; i++) {
+        var p = ps[i];
+        for (var key in p) {
+            alert(key + ":" + p[key]);
+        }
+    }
+</script>
+```
+
+### 18.2 JSON数据和Java对象的相互转换
+
+**JSON解析器**
+
+常见的解析器：Jsonlib，Gson，fastjson，jackson
+
+**JSON转为Java对象**
+
+1.导入jackson的相关jar包
+
+2.创建Jackson核心对象 ObjectMapper
+
+3.调用ObjectMapper的相关方法进行转换
+
+- readValue(json字符串数据,Class)
+
+**Java对象转换JSON**
+
+使用步骤
+
+1. 导入jackson的相关jar包
+2. 创建Jackson核心对象 ObjectMapper
+3. 调用ObjectMapper的相关方法进行转换
+   1. 转换方法
+      - writeValue(参数1，obj)
+      - 参数1
+        - File：将obj对象转换为JSON字符串，并保存到指定的文件中
+        - Writer：将obj对象转换为JSON字符串，并将json数据填充到字符输出流中
+        - OutputStream：将obj对象转换为JSON字符串，并将json数据填充到字节输出流中
+      - writeValueAsString(obj)：将对象转为json字符串
+   2. 注解
+      - @JsonIgnore：排除属性
+      - @JsonFormat：属性值的格式化
+        - @JsonFormat(pattern = "yyyy-MM-dd")
+   3. 复杂Java对象转换
+      - List：数组
+      - Map：对象格式一致
+
+**案例：**校验用户名是否存在。
+
+服务器响应的数据，在客户端使用时，要想当做json数据格式使用。有两种解决方案。
+
+- $.get(type)：将最后一个参数type指定为"json"
+- 在服务器端设置MIME类型
+  - response.setContentType("application/json;charset=utf-8");
+
+前端JS代码
+
+```JS
+<script>
+    $(function () {
+        $("#username").blur(function () {
+            var username = $(this).val();
+            $.get("findUserServlet",{username:username},function (data) {
+                var span = $("#s_username");
+                if (data.userExist) {
+                    span.css("color","red");
+                    span.html(data.msg);
+                } else {
+                    span.css("color","green");
+                    span.html(data.msg);
+                }
+            });
+        });
+    });
+</script>
+```
+
+服务器端代码
+
+```Java
+import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+@WebServlet("/findUserServlet")
+public class FindUserServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        this.doPost(req,resp);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String username = req.getParameter("username");
+        resp.setContentType("application/json;charset=utf-8");
+        Map<String,Object> map = new HashMap<String,Object>();
+        if ("tom".equals(username)) {
+            map.put("userExist",true);
+            map.put("msg","此用户名太受欢迎，请更换一个");
+        } else {
+            map.put("userExist",false);
+            map.put("msg","用户名可用");
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.writeValue(resp.getWriter(),map);
+    }
+}
+```
+
+## 19. Redis
+
+### 19.1 Redis概述
+
+**概念：**redis是一款高性能的NOSQL系列的非关系型数据库。
+
+**什么是NOSQL**
+
+NoSQL(NoSQL = Not Only SQL)，意即“不仅仅是SQL”，是一项全新的数据库理念，泛指非关系型的数据库。
+随着互联网web2.0网站的兴起，传统的关系数据库在应付web2.0网站，特别是超大规模和高并发的SNS类型的web2.0纯动态网站已经显得力不从心，暴露了很多难以克服的问题，而非关系型的数据库则由于其本身的特点得到了非常迅速的发展。NoSQL数据库的产生就是为了解决大规模数据集合多重数据种类带来的挑战，尤其是大数据应用难题。
+
+1.NOSQL和关系型数据库比较
+
+- 优点
+  - 成本：nosql数据库简单易部署，基本都是开源软件，不需要像使用oracle那样花费大量成本购买使用，相比关系型数据库价格便宜。
+  - 查询速度：nosql数据库将数据存储于缓存之中，关系型数据库将数据存储在硬盘中，自然查询速度远不及nosql数据库。
+  - 存储数据的格式：nosql的存储格式是key,value形式、文档形式、图片形式等等，所以可以存储基础类型以及对象或者是集合等各种格式，而数据库则只支持基础类型。
+  - 扩展性：关系型数据库有类似join这样的多表查询机制的限制导致扩展很艰难。
+- 缺点
+  - 维护的工具和资料有限，因为nosql是属于新的技术，不能和关系型数据库10几年的技术同日而语。
+  - 不提供对sql的支持，如果不支持sql这样的工业标准，将产生一定用户的学习和使用成本。
+  - 不提供关系型数据库对事务的处理。
+
+2.非关系型数据库的优势
+
+- 性能NOSQL是基于键值对的，可以想象成表中的主键和值的对应关系，而且不需要经过SQL层的解析，所以性能非常高。
+- 可扩展性同样也是因为基于键值对，数据之间没有耦合性，所以非常容易水平扩展。
+
+3.关系型数据库的优势
+
+- 复杂查询可以用SQL语句方便的在一个表以及多个表之间做非常复杂的数据查询。
+- 事务支持使得对于安全性能很高的数据访问要求得以实现。对于这两类数据库，对方的优势就是自己的弱势，反之亦然。
+
+4.总结
+
+- 关系型数据库与NoSQL数据库并非对立而是互补的关系，即通常情况下使用关系型数据库，在适合使用NoSQL的时候使用NoSQL数据库，让NoSQL数据库对关系型数据库的不足进行弥补。
+- 一般会将数据存储在关系型数据库中，在nosql数据库中备份存储关系型数据库的数据。
+
+**主流的NOSQL产品**
+
+键值(Key-Value)存储数据库
+
+- 相关产品：Tokyo Cabinet/Tyrant、Redis、Voldemort、Berkeley DB
+- 典型应用：内容缓存，主要用于处理大量数据的高访问负载
+- 数据模型：一系列键值对
+- 优势：快速查询
+- 劣势：存储的数据缺少结构化
+
+列存储数据库
+
+- 相关产品：Cassandra, HBase, Riak
+- 典型应用：分布式的文件系统
+- 数据模型：以列簇式存储，将同一列数据存在一起
+- 优势：查找速度快，可扩展性强，更容易进行分布式扩展
+- 劣势：功能相对局限
+
+文档型数据库
+
+- 相关产品：CouchDB、MongoDB
+- 典型应用：Web应用（与Key-Value类似，Value是结构化的
+- 数据模型：一系列键值对
+- 优势：数据结构要求不严格
+- 劣势：查询性能不高，而且缺乏统一的查询语法
+
+图形(Graph)数据库
+
+- 相关数据库：Neo4J、InfoGrid、Infinite Graph
+- 典型应用：社交网络
+- 数据模型：图结构
+- 优势：利用图结构相关算法
+- 劣势：需要对整个图做计算才能得出结果，不容易做分布式的集群方案
+
+**什么是Redis**
+
+Redis是用C语言开发的一个开源的高性能键值对（key-value）数据库，官方提供测试数据，50个并发执行100000个请求,读的速度是110000次/s，写的速度是81000次/s，且Redis通过提供多种键值数据类型来适应不同场景下的存储需求，目前为止Redis支持的键值数据类型如下：
+
+- 字符串类型 string
+- 哈希类型 hash
+- 列表类型 list
+- 集合类型 set
+- 有序集合类型 sortedset
+
+redis的应用场景
+
+- 缓存(数据查询、短连接、新闻内容、商品内容等等)
+- 聊天室的在线好友列表
+- 任务队列。(秒杀、抢购、12306等等)
+- 应用排行榜
+- 网站访问统计
+- 数据过期处理(可以精确到毫秒)
+- 分布式集群架构中的session分离
+
+**下载安装**
+
+1.官网：https://redis.io
+
+2.中文网：http://www.redis.net.cn/
+
+3.解压直接可以使用
+
+- redis.windows.conf：配置文件
+- redis-cli.exe：redis的客户端
+- redis-server.exe：redis服务器端
+
+### 19.2 Redis命令操作
+
+**redis的数据结构**
+
+redis存储的是：key,value格式的数据，其中key都是字符串，value有5种不同的数据结构。
+
+- value的数据结构
+  - 字符串类型 string
+  - 哈希类型 hash：map格式
+  - 列表类型 list：linkedlist格式。支持重复元素
+  - 集合类型 set：不允许重复元素
+  - 有序集合类型 sortedset：不允许重复元素，且元素有顺序
+
+**字符串类型 string**
+
+1.存储：set key value
+
+```Redis
+127.0.0.1:6379> set username zhangsan
+OK
+```
+
+2.获取：get key
+
+```Redis
+127.0.0.1:6379> get username
+"zhangsan"
+```
+
+3.删除：del key
+
+```Redis
+127.0.0.1:6379> del age
+(integer) 1
+```
+
+**哈希类型 hash**
+
+1.存储：hset key field value
+
+```Redis
+127.0.0.1:6379> hset myhash username lisi
+(integer) 1
+127.0.0.1:6379> hset myhash password 123
+(integer) 1
+```
+
+2.获取
+
+- hget key field：获取指定的field对应的值
+
+```Redis
+127.0.0.1:6379> hget myhash username
+"lisi"
+```
+
+- hgetall key：获取所有的field和value
+
+```Redis
+127.0.0.1:6379> hgetall myhash
+1) "username"
+2) "lisi"
+3) "password"
+4) "123"
+```
+
+3.删除：hdel key field
+
+```Redis
+127.0.0.1:6379> hdel myhash username
+(integer) 1
+```
+
+**列表类型 list：可以添加一个元素到列表的头部(左边)或者尾部(右边)**
+
+1.添加
+
+- lpush key value：将元素加入列表左边
+- rpush key value：将元素加入列表右边
+
+```Redis
+127.0.0.1:6379> lpush myList a
+(integer) 1
+127.0.0.1:6379> lpush myList b
+(integer) 2
+127.0.0.1:6379> rpush myList c
+(integer) 3
+```
+
+2.获取
+
+- lrange key start end：范围获取
+
+```Redis
+127.0.0.1:6379> lrange myList 0 -1
+1) "b"
+2) "a"
+3) "c"
+```
+
+3.删除
+
+- lpop key：删除列表最左边的元素，并将元素返回
+- rpop key：删除列表最右边的元素，并将元素返回
+
+**集合类型 set：不允许重复元素**
+
+1.存储：sadd key value
+
+```Redis
+127.0.0.1:6379> sadd myset a
+(integer) 1
+127.0.0.1:6379> sadd myset a
+(integer) 0
+```
+
+2.获取：smembers key：获取set集合中所有元素
+
+```Redis
+127.0.0.1:6379> smembers myset
+1) "a"
+```
+
+3.删除：srem key value：删除set集合中的某个元素
+
+```Redis
+127.0.0.1:6379> srem myset a
+(integer) 1
+```
+
+**有序集合类型 sortedset：不允许重复元素，且元素有顺序。每个元素都会关联一个double类型的分数。redis正是通过分数来为集合中的成员进行从小到大的排序**
+
+1.存储：zadd key score value
+
+```Redis
+127.0.0.1:6379> zadd mysort 60 zhangsan
+(integer) 1
+127.0.0.1:6379> zadd mysort 50 lisi
+(integer) 1
+127.0.0.1:6379> zadd mysort 80 wangwu
+(integer) 1
+```
+
+2.获取：zrange key start end [withscores]
+
+```Redis
+127.0.0.1:6379> zrange mysort 0 -1
+1) "lisi"
+2) "zhangsan"
+3) "wangwu"
+127.0.0.1:6379> zrange mysort 0 -1 withscores
+1) "lisi"
+2) "50"
+3) "zhangsan"
+4) "60"
+5) "wangwu"
+6) "80"
+```
+
+3.删除：zrem key value
+
+```Redis
+127.0.0.1:6379> zrem mysort lisi
+(integer) 1
+```
+
+**通用命令**
+
+1.keys *：查询所有的键
+
+2.type key：获取键对应的value的类型
+
+3.del key：删除指定的key value
+
+### 19.3 Redis持久化
+
+Redis是一个内存数据库，当redis服务器重启，或者电脑重启，数据会丢失，我们可以将redis内存中的数据持久化保存到硬盘的文件中。
+
+**Redis持久化机制**
+
+1.RDB：默认方式，不需要进行配置，默认就使用这种机制。
+
+- 在一定的间隔时间中，检测key的变化情况，然后持久化数据。
+
+- 编辑redis.windwos.conf文件
+
+- ```Text
+  # after 900 sec (15 min) if at least 1 key changed
+  save 900 1
+  # after 300 sec (5 min) if at least 10 keys changed
+  save 300 10
+  # after 60 sec if at least 10000 keys changed
+  save 60 10000
+  ```
+
+- 重新启动redis服务器，并指定配置文件名称
+
+- F:\redis-2.8.9>redis-server.exe redis.windows.conf
+
+2.AOF：日志记录的方式，可以记录每一条命令的操作。可以每一次命令操作后，持久化数据。
+
+- 编辑redis.windwos.conf文件
+
+  - appendonly no（关闭aof） --> appendonly yes （开启aof）
+
+  - ```Text
+    # appendfsync always：每一次操作都进行持久化
+    appendfsync everysec：每隔一秒进行一次持久化
+    # appendfsync no	：不进行持久化
+    ```
+
+## 20. Jedis
+
+**Jedis：**一款Java操作redis数据库的工具。
+
+**使用步骤**
+
+1.下载Jedis的jar包
+
+2.使用
+
+```Java
+@Test
+public void test1() {
+    //1.获取连接
+    Jedis jedis = new Jedis("localhost",6379);
+    //2.操作
+    jedis.set("username","zhangsan");
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+**Jedis操作各种redis中的数据结构**
+
+1.字符串类型 string
+
+- set
+- get
+
+```Java
+@Test
+public void test2() {
+    //1.获取连接
+    Jedis jedis = new Jedis("localhost",6379); //如果使用空参构造，默认值“localhost”，6379端口
+    //2.操作
+    //存储
+    jedis.set("username","zhangsan");
+    //获取
+    String username = jedis.get("username");
+    System.out.println(username);
+    //可以使用setex()方法存储可以指定过期时间的key value
+    jedis.setex("activecode",20,"hehe"); //将activecode：hehe键值对存入redis，并且20秒后自动删除该键值对
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+2.哈希类型 hash：map格式
+
+- hset
+- hget
+- hgetAll
+
+```Java
+@Test
+public void test3() {
+    //1.获取连接
+    Jedis jedis = new Jedis(); //如果使用空参构造，默认值“localhost”，6379端口
+    //2.操作
+    //存储hash
+    jedis.hset("user","name","lisi");
+    jedis.hset("user","age","23");
+    jedis.hset("user","gender","female");
+    //获取hash
+    String name = jedis.hget("user", "name");
+    System.out.println(name);
+    //获取hash的所有map中的数据
+    Map<String, String> user = jedis.hgetAll("user");
+    Set<String> keySet = user.keySet();
+    for (String key : keySet) {
+        String value = user.get(key);
+        System.out.println(key + ":" + value);
+    }
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+3.列表类型 list：linkedlist格式。支持重复元素
+
+- lpush/rpush
+- lpop/rpop
+- lrange start end：范围获取
+
+```Java
+@Test
+public void test4() {
+    //1.获取连接
+    Jedis jedis = new Jedis(); //如果使用空参构造，默认值“localhost”，6379端口
+    //2.操作
+    //存储 list
+    jedis.lpush("mylist","a","b","c");
+    jedis.rpush("mylist","a","b","c");
+    //范围获取 list
+    List<String> mylist = jedis.lrange("mylist", 0, -1);
+    System.out.println(mylist);
+    //弹出 list
+    String element1 = jedis.lpop("mylist");
+    System.out.println(element1);
+    String element2 = jedis.rpop("mylist");
+    System.out.println(element2);
+    List<String> mylist1 = jedis.lrange("mylist", 0, -1);
+    System.out.println(mylist1);
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+4.集合类型 set：不允许重复元素
+
+- sadd
+- smembers：获取所有元素
+
+```Java
+@Test
+public void test5() {
+    //1.获取连接
+    Jedis jedis = new Jedis(); //如果使用空参构造，默认值“localhost”，6379端口
+    //2.操作
+    //存储 set
+    jedis.sadd("myset","java","php","c++");
+    //获取 set
+    Set<String> myset = jedis.smembers("myset");
+    System.out.println(myset);
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+5.有序集合类型 sortedset：不允许重复元素，且元素有顺序
+
+- zadd
+- zrange
+
+```Java
+@Test
+public void test6() {
+    //1.获取连接
+    Jedis jedis = new Jedis(); //如果使用空参构造，默认值“localhost”，6379端口
+    //2.操作
+    //存储 sortedset
+    jedis.zadd("mysortedset",3,"亚瑟");
+    jedis.zadd("mysortedset",30,"后羿");
+    jedis.zadd("mysortedset",25,"孙悟空");
+    //获取 sortedset
+    Set<String> mysortedset = jedis.zrange("mysortedset", 0, -1);
+    System.out.println(mysortedset);
+    //3.关闭连接
+    jedis.close();
+}
+```
+
+**Jedis连接池：JedisPool**
+
+使用
+
+1. 创建JedisPool连接池对象
+2. 调用方法getResource()方法获取Jedis连接
+
+```Java
+@Test
+public void test7() {
+    //0.创建配置对象
+    JedisPoolConfig config = new JedisPoolConfig();
+    config.setMaxTotal(50);
+    config.setMaxIdle(10);
+    //1.创建Jedis连接池对象
+    JedisPool jedisPool = new JedisPool(config,"localhost",6379);
+    //2.获取连接
+    Jedis jedis = jedisPool.getResource();
+    //3.使用
+    jedis.set("hehe","heiheihei");
+    //4.关闭，归还到连接池中
+    jedis.close();
+}
+```
+
+连接池工具类
+
+```Java
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
+public class JedisPoolUtils {
+    private static JedisPool jedisPool;
+
+    static {
+        InputStream is = JedisPoolUtils.class.getClassLoader().getResourceAsStream("jedis.properties");
+        Properties pro = new Properties();
+        try {
+            pro.load(is);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        JedisPoolConfig config = new JedisPoolConfig();
+        config.setMaxTotal(Integer.parseInt(pro.getProperty("maxTotal")));
+        config.setMaxIdle(Integer.parseInt(pro.getProperty("maxIdle")));
+        jedisPool = new JedisPool(config,pro.getProperty("host"),Integer.parseInt(pro.getProperty("port")));
+    }
+
+    public static Jedis getJedis() {
+        return jedisPool.getResource();
+    }
+}
+```
+
+**注意：**使用redis缓存一些不经常发生变化的数据。
+
+数据库的数据一旦发生改变，则需要更新缓存。
+
+- 数据库的表执行增删改的相关操作，需要将redis缓存数据清空，再次存入
+- 在service对应的增删改方法中，将redis数据删除
+
